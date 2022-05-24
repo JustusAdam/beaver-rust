@@ -27,3 +27,22 @@ pub struct RemoteConnectContext {
 pub struct ListenConnectionsContext {
     _ip_address: IpAddr,
 }
+
+pub struct KVContext(pub std::collections::HashMap<String, String>);
+
+impl CustomContext for KVContext {
+    fn as_any(&self) -> &dyn Any {
+        self as &dyn Any
+    }
+}
+
+#[macro_export]
+macro_rules! kv_ctx {
+    ($($k:literal => $v:expr),* $(,)?) => {{
+        let mut m = std::collections::HashMap::new();
+        $(m.insert($k.to_string(), $v.to_string()));*
+        ;
+        $crate::filter::Context::CustomContext(Box::new($crate::filter::KVContext(m)))
+    }};
+}
+

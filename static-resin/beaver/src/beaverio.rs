@@ -10,7 +10,7 @@ use crate::policy::{Policied, PolicyError};
 extern crate serde;
 
 pub fn export_and_release(context: &filter::Context, s: &policy::PoliciedString) -> Result<String, Box<PolicyError>> {
-    match s.export_check(&context) {
+    match s.export_check_borrow(&context) {
         Ok(str) => { Ok(str.clone()) }, 
         Err(pe) => { Err(Box::new(pe)) }
     }
@@ -32,7 +32,7 @@ impl<W: Write> BeaverBufWriter<W> {
     }
 
     pub fn safe_write_serialized(&mut self, buf: &policy::PoliciedString) -> Result<usize, Box<dyn Error>> {
-        match buf.export_check(&self.ctxt) {
+        match buf.export_check_borrow(&self.ctxt) {
             Ok(s) => {
                 match self.buf_writer.write(format!("{}\n", s).as_bytes()) {
                     Ok(us) => { Ok(us) }, 

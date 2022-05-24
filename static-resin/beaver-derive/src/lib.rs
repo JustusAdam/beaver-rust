@@ -167,7 +167,7 @@ pub fn policied_derive(input: TokenStream) -> TokenStream {
     if *is_protected {
       quote! {
         #es
-        #name: #name.export(),
+        #name: #name.unsafe_export(),
       }
     } else {
       quote! {
@@ -195,7 +195,7 @@ pub fn policied_derive(input: TokenStream) -> TokenStream {
   ```
   */
   let make_decomposed = quote! {
-    pub fn make_decomposed(#make_decomposed_arguments policy: Box<dyn Policy>) -> Self {
+    pub fn make_decomposed(#make_decomposed_arguments policy: Box<dyn beaver::policy::Policy>) -> Self {
       #policies;
       #policied_name::make(
         #unpolicied_name {

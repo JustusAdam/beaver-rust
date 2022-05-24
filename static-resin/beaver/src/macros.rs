@@ -1,42 +1,54 @@
+#[macro_export]
+macro_rules! derive_policied {
+    ($input_type:ty, $output_type_name:ident) => {
+        derive_policied!($input_type, $output_type_name ,);
+    };
+    ($input_type:ty, $output_type_name:ident, $($ty_vars:ident),*) => {
+        #[derive(Serialize, Deserialize, Clone)]
+        pub struct $output_type_name<$($ty_vars),*> {
+            inner: $input_type,
+            policy: Box<dyn $crate::policy::Policy>
+        }
+
+        impl <$($ty_vars),*> $crate::policy::Policied<$input_type> for $output_type_name<$($ty_vars),*> {
+            fn make(inner: $input_type, policy: Box<dyn $crate::policy::Policy>) -> Self {
+                Self {
+                    inner, policy
+                }
+            }
+            fn get_policy(&self) -> &Box<dyn $crate::policy::Policy> {
+                &self.policy
+            }
+            fn remove_policy(&mut self) -> () { self.policy = Box::new($crate::policy::NonePolicy); }
+            fn export_check(self, ctxt: &$crate::filter::Context) -> Result<$input_type, $crate::policy::PolicyError> {
+                match self.get_policy().check(&ctxt) {
+                    Ok(_) => {
+                        Ok(self.inner)
+                    }, 
+                    Err(pe) => { Err(pe) }
+                }
+            }    
+            fn export_check_borrow(&self, ctxt: &$crate::filter::Context) -> Result<&$input_type, $crate::policy::PolicyError> {
+                match self.get_policy().check(&ctxt) {
+                    Ok(_) => {
+                        Ok(&self.inner)
+                    }, 
+                    Err(pe) => { Err(pe) }
+                }
+            }
+            fn unsafe_export(self) -> $input_type {
+                self.inner
+            }
+        }
+    };
+}
+
 /*
 This macro can be used to easily create a simple policied version of a type. 
 It creates a PoliciedTYPE struct and implements the Policied<TYPE> trait for it.
 
 Usage: derive_policied!(TYPE, PoliciedTYPE);
 */
-#[macro_export]
-macro_rules! derive_policied {
-    ($input_type:ty, $output_type:ident) => {
-        #[derive(Serialize, Deserialize, Clone)]
-        pub struct $output_type {
-            inner: $input_type,
-            policy: Box<dyn Policy>
-        }
-
-        impl Policied<$input_type> for $output_type {
-            fn make(inner: $input_type, policy: Box<dyn Policy>) -> $output_type {
-                $output_type {
-                    inner, policy
-                }
-            }
-            fn get_policy(&self) -> &Box<dyn Policy> {
-                &self.policy
-            }
-            fn remove_policy(&mut self) -> () { self.policy = Box::new(NonePolicy); }
-            fn export_check(&self, ctxt: &filter::Context) -> Result<$input_type, PolicyError> {
-                match self.get_policy().check(&ctxt) {
-                    Ok(_) => {
-                        Ok(self.inner.clone())
-                    }, 
-                    Err(pe) => { Err(pe) }
-                }
-            }
-            fn export(&self) -> $input_type {
-                self.inner.clone()
-            }
-        }
-    };
-}
 
 /*
 This macro can be used to easily create a policied vector that has elements of a 
@@ -50,7 +62,7 @@ Usage: derive_policied_vec!(PoliciedTYPEVec, TYPE, PoliciedTYPE);
 #[macro_export]
 macro_rules! derive_policied_vec {
     ($policied_vector_type:ident, $unpolicied_element_type:ty, $policied_element_type:ident) => {
-        derive_policied!(Vec<$unpolicied_element_type>, $policied_vector_type);
+        $crate::derive_policied!(Vec<$unpolicied_element_type>, $policied_vector_type);
 
         impl $policied_vector_type {
             pub fn push(&mut self, value: $unpolicied_element_type) {
@@ -59,7 +71,7 @@ macro_rules! derive_policied_vec {
         
             pub fn push_policy(&mut self, value: $policied_element_type) {
                 self.policy = self.policy.merge(value.get_policy()).unwrap();
-                self.inner.push(value.export());
+                self.inner.push(value.unsafe_export());
             }
         
             pub fn pop(&mut self) -> Option<$policied_element_type> {
@@ -76,6 +88,28 @@ macro_rules! derive_policied_vec {
     }
 }
 
+#[macro_export]
+macro_rules! derive_policied_map {
+    ($policied_map_type:ident, $key_type:ty, $unpolicied_element_type:ty, $policied_element_type:ident) => {
+        $crate::derive_policied!(std::collections::HashMap<$key_type,$unpolicied_element_type>, $policied_map_type);
+
+        impl $policied_map_type {
+            pub fn insert(&mut self, key: $key_type, v: $policied_element_type) -> Option<$policied_element_type> {
+                self.policy = self.policy.merge(v.get_policy()).unwrap();
+                self.inner.insert(key, v.export());
+            }
+
+            pub fn get(&mut self, key: &$key_type, v: $policied_element_type) -> Option<&$policied_element_type> {
+                self.inner.get(key).map(|v| $policied_element_type { inner: v, policy: self.policy.clone()})
+            }
+
+            pub fn new() -> Self {
+                Self { policy: $crate::policy::NonePolicy, inner: std::collections::HashMap::new() }
+            }
+        }
+    }
+}
+
 /*
 This macro can be used to easily create a policied option that may contain a policied type. 
 It creates a PoliciedTYPEOption struct and methods to create and obtain the option.
@@ -86,18 +120,18 @@ Usage: derive_policied_option!(PoliciedTYPEOption, TYPE, PoliciedTYPE);
 #[macro_export]
 macro_rules! derive_policied_option {
     ($policied_option_type:ident, $unpolicied_element_type:ty, $policied_element_type:ident) => {
-        derive_policied!(Option<$unpolicied_element_type>, $policied_option_type);
+        $crate::derive_policied!(Option<$unpolicied_element_type>, $policied_option_type);
         
         impl $policied_option_type {
             pub fn make_option(ops: Option<$policied_element_type>) -> Self {
                 match ops {
                     Some(s) => $policied_option_type {
-                        inner: Some(s.export()),
-                        policy: s.policy.clone()
+                        policy: s.policy.clone(),
+                        inner: Some(s.unsafe_export()),
                     },
                     None => $policied_option_type {
                         inner: None,
-                        policy: Box::new(NonePolicy)
+                        policy: Box::new($crate::policy::NonePolicy)
                     }
                 }
             }

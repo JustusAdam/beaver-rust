@@ -21,12 +21,14 @@ pub trait Policy : DynClone + erased_serde::Serialize {
 }
 
 dyn_clone::clone_trait_object!(Policy);
-pub trait Policied<T> : erased_serde::Serialize { 
+pub trait Policied<T> //: erased_serde::Serialize 
+{ 
     fn make(inner: T, policy: Box<dyn Policy>) -> Self;
     fn get_policy(&self) -> &Box<dyn Policy>;
     fn remove_policy(&mut self) -> ();
-    fn export(&self) -> T; 
-    fn export_check(&self, ctxt: &filter::Context) -> Result<T, PolicyError>;
+    fn unsafe_export(self) -> T; 
+    fn export_check(self, ctxt: &filter::Context) -> Result<T, PolicyError>;
+    fn export_check_borrow(&self, ctxt: &filter::Context) -> Result<&T, PolicyError>;
 }
 
 #[derive(Debug, Clone)]
