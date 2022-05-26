@@ -150,7 +150,7 @@ pub type GPoliciedVec<T> = GPolicied<Vec<T>>;
 impl <T> GPoliciedVec<T> {
     pub fn push(&mut self, e: GPolicied<T>) {
         let GPolicied { policy, inner } = e;
-        self.policy.merge(&policy).unwrap();
+        self.policy = self.policy.merge(&policy).unwrap();
         self.inner.push(inner);
     }
 
