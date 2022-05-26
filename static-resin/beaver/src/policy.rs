@@ -78,15 +78,7 @@ impl MergePolicy {
 #[typetag::serde]
 impl Policy for MergePolicy {
     fn check(&self, ctxt: &filter::Context) -> Result<(), PolicyError> {
-        match self.policy1.check(ctxt) {
-            Ok(_) => {
-                match (*self.policy2).check(ctxt) {
-                    Ok(_) => { Ok(()) },
-                    Err(pe) => { Err(pe) }
-                }
-            },
-            Err(pe) => { Err(pe) }
-        }
+        self.policy1.check(ctxt).and_then(|_| self.policy2.check(ctxt))
     }
 
     fn merge(&self, other: &Box<dyn Policy>) -> Result<Box<dyn Policy>, PolicyError> {
